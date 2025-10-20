@@ -1,0 +1,12 @@
+GET http://localhost:8080/api/products
+
+###
+
+POST http://localhost:8080/api/products
+Content-Type: application/json
+
+{
+    "name": "New Product",
+    "price": 29.99,
+    "description": "This is a new product."
+}
