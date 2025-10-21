@@ -1,34 +1,37 @@
-# ======================================================
-# Stage: Production build for CodeIgniter 4 REST API
-# ======================================================
-FROM php:8.4-cli AS app
+# ==========================================
+# Stage 1: PHP with extensions and Composer
+# ==========================================
+FROM php:8.4-fpm AS app
 
-# Install required system packages and PHP extensions
 RUN apt-get update && apt-get install -y \
     git unzip libzip-dev libpng-dev libonig-dev libxml2-dev libicu-dev \
     && docker-php-ext-install mysqli pdo_mysql mbstring zip intl gd \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /var/www/html
 
-# Copy all project files including spark, composer.json, etc.
 COPY . .
 
-# Install Composer from the official image (no multi-stage complexity)
+# Copy composer from official image
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# Install dependencies (ignores platform extension mismatch)
 RUN composer install --no-dev --no-interaction --prefer-dist --ignore-platform-reqs
 
-# Ensure spark is executable
-RUN chmod +x spark
+RUN chmod +x spark && chown -R www-data:www-data writable
 
-# Create and fix permissions for writable directory
-RUN mkdir -p writable && chown -R www-data:www-data writable
+# ==========================================
+# Stage 2: Nginx + PHP-FPM runtime
+# ==========================================
+FROM nginx:alpine
 
-# Expose the app port for Dokploy
-EXPOSE 8080
+# Copy Nginx configuration
+COPY ./nginx.conf /etc/nginx/conf.d/default.conf
 
-# Use CI4 built-in server as the main process
-CMD ["php", "spark", "serve", "--host=0.0.0.0", "--port=8080"]
+# Copy app from previous stage
+COPY --from=app /var/www/html /var/www/html
+
+WORKDIR /var/www/html
+
+EXPOSE 80
+
+# Start both services (Nginx + PHP-FPM)
+CMD ["sh", "-c", "php-fpm -D && nginx -g 'daemon off;'"]
