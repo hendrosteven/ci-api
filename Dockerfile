@@ -6,7 +6,7 @@ FROM php:8.4-cli AS app
 # Install required system packages and PHP extensions
 RUN apt-get update && apt-get install -y \
     git unzip libzip-dev libpng-dev libonig-dev libxml2-dev libicu-dev \
-    && docker-php-ext-install pdo_mysql mbstring zip intl gd \
+    && docker-php-ext-install mysqli pdo_mysql mbstring zip intl gd \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
