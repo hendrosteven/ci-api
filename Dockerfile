@@ -1,37 +1,35 @@
 # ==========================================
-# Stage 1: PHP with extensions and Composer
+# Base image: PHP 8.4 + FPM + Alpine
 # ==========================================
-FROM php:8.4-fpm AS app
+FROM php:8.4-fpm-alpine
 
-RUN apt-get update && apt-get install -y \
-    git unzip libzip-dev libpng-dev libonig-dev libxml2-dev libicu-dev \
-    && docker-php-ext-install mysqli pdo_mysql mbstring zip intl gd \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Install system dependencies + Nginx
+RUN apk add --no-cache nginx git unzip icu-dev libzip-dev libpng-dev oniguruma-dev libxml2-dev bash curl
 
+# Install PHP extensions
+RUN docker-php-ext-install mysqli pdo_mysql mbstring zip intl gd
+
+# Set working directory
 WORKDIR /var/www/html
 
+# Copy app files
 COPY . .
 
-# Copy composer from official image
+# Copy composer from official image and install dependencies
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 RUN composer install --no-dev --no-interaction --prefer-dist --ignore-platform-reqs
 
+# Copy Nginx config
+COPY nginx.conf /etc/nginx/http.d/default.conf
+
+# Fix permissions
 RUN chmod +x spark && chown -R www-data:www-data writable
 
-# ==========================================
-# Stage 2: Nginx + PHP-FPM runtime
-# ==========================================
-FROM nginx:alpine
-
-# Copy Nginx configuration
-COPY ./nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy app from previous stage
-COPY --from=app /var/www/html /var/www/html
-
-WORKDIR /var/www/html
-
+# Expose ports
 EXPOSE 80
 
-# Start both services (Nginx + PHP-FPM)
-CMD ["sh", "-c", "php-fpm -D && nginx -g 'daemon off;'"]
+# Healthcheck (optional)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD curl -f http://localhost/ || exit 1
+
+# Start both services
+CMD sh -c "php-fpm -D && nginx -g 'daemon off;'"
