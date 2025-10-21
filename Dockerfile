@@ -1,40 +1,30 @@
-# ===============================================================
-# Stage 1: Composer dependencies
-# ===============================================================
-FROM composer:2 AS vendor
-
-WORKDIR /app
-
-# Copy only composer files first (for caching)
-COPY composer.json composer.lock* ./
-
-# Make sure PHP extensions exist for dependency resolution
-RUN composer install --no-dev --no-interaction --prefer-dist --ignore-platform-reqs
-
-# ===============================================================
-# Stage 2: CodeIgniter runtime
-# ===============================================================
 FROM php:8.3-cli
 
-# Install required system libraries and PHP extensions
+# Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y \
-    libzip-dev zip unzip libpng-dev libonig-dev libxml2-dev git \
+    git unzip libzip-dev libpng-dev libonig-dev libxml2-dev \
     && docker-php-ext-install pdo_mysql mbstring zip exif pcntl gd
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy app source
+# Copy all files (including spark)
 COPY . .
 
-# Copy vendor folder from builder
-COPY --from=vendor /app/vendor ./vendor
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Ensure writable folder permission
+# Install dependencies (skip platform checks)
+RUN composer install --no-dev --no-interaction --prefer-dist --ignore-platform-reqs
+
+# Ensure spark is executable
+RUN chmod +x spark
+
+# Fix writable folder permissions
 RUN mkdir -p writable && chown -R www-data:www-data writable
 
-# Expose CodeIgniter server port
+# Expose port for Dokploy
 EXPOSE 8080
 
-# Start CodeIgniter built-in server
+# Start CodeIgniter app
 CMD ["php", "spark", "serve", "--host=0.0.0.0", "--port=8080"]
